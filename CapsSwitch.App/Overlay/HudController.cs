@@ -266,7 +266,10 @@ public sealed class HudController : IDisposable
             string perf = pressedAtMs > 0 ? $" [Perf] 按键→HUD首帧 {Environment.TickCount64 - pressedAtMs}ms (位置={posSource})" : string.Empty;
             _log($"[HUD] 显示 '{text}' @ ({_form.Left},{_form.Top}) size={_form.Width}x{_form.Height} dpi={_form.DeviceDpi}{perf}");
         }
-        _form.BringToFront();
+        // 不用 Form.BringToFront:其内部 SetWindowPos 不带 SWP_NOACTIVATE,当本进程已持有前台
+        // (如自己的设置窗口)时会把 HUD 激活、抢走键盘焦点;TopMost 已在,这里只带 NOACTIVATE 重申置顶。
+        Interop.Win32Native.SetWindowPos(_form.Handle, Interop.Win32Native.HwndTopmost, 0, 0, 0, 0,
+            Interop.Win32Native.SwpNoMove | Interop.Win32Native.SwpNoSize | Interop.Win32Native.SwpNoActivate | Interop.Win32Native.SwpShowWindow);
     }
 
     // ── 光标位置快解析(同步、微秒级;UI 首帧不等待 UIA 定位) ──
@@ -424,7 +427,9 @@ public sealed class HudController : IDisposable
             string perf = pressedAtMs > 0 ? $" [Perf] 按键→HUD首帧 {Environment.TickCount64 - pressedAtMs}ms (位置={posSource})" : string.Empty;
             _log($"[HUD] 列表模式 active={activeIndex}/{items.Count} @ ({_form.Left},{_form.Top}) size={_form.Width}x{_form.Height}{perf}");
         }
-        _form.BringToFront();
+        // 同 ShowForCaret:不用 BringToFront,带 SWP_NOACTIVATE 的置顶重申,避免抢焦点
+        Interop.Win32Native.SetWindowPos(_form.Handle, Interop.Win32Native.HwndTopmost, 0, 0, 0, 0,
+            Interop.Win32Native.SwpNoMove | Interop.Win32Native.SwpNoSize | Interop.Win32Native.SwpNoActivate | Interop.Win32Native.SwpShowWindow);
     }
 
     private void StartHideTimer(int? durationOverrideMs)

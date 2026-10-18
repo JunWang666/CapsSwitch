@@ -143,6 +143,16 @@ internal static partial class Win32Native
     [LibraryImport("user32.dll")]
     public static partial IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
 
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+    public static readonly IntPtr HwndTopmost = new(-1);
+    public const uint SwpNoMove = 0x0002;
+    public const uint SwpNoSize = 0x0001;
+    public const uint SwpNoActivate = 0x0010;
+    public const uint SwpShowWindow = 0x0040;
+
     public const uint WM_QUIT = 0x0012;
 
     [LibraryImport("user32.dll", SetLastError = true)]
