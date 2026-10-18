@@ -307,3 +307,28 @@ PowerShell 独立确认: 值已删除
 本轮中一次补丁脚本误调用把 `InputSourceService.cs` 截断为 0 字节(打开即截断、未写回)。恢复方式:用 ilspycmd 反编译上次成功构建的 `bin/Debug` DLL 还原该文件,补回可空注解(0 警告),重新打上"自愈后台化"补丁;以 119 个单测 + 上方全量实测确认行为无损。建议后续纳入版本控制(git)避免单点风险。
 
 - build 0 警告 0 错误;dotnet test **119/119**(新增 CaretPlacementTests ×3);publish 双版本成功。
+
+---
+
+# 聚焦 HUD 冷却记录(2026-10-18 第八轮)
+
+## 需求与实现
+
+聚焦触发路径加冷却:同 (输入源+模式) 状态在冷却期内(默认 10s)不重复显示;状态变化立即显示;切换/外部变化/循环/⇪ 路径不受限。状态键不含 hwnd(跨窗口同状态也冷却);`HudFocusCooldownSeconds`(0-3600,默认 10,0=旧行为)入 settings.json 与设置窗口"触发参数"分组,保存热生效;只有真正显示才更新冷却时间戳。
+
+- 新增纯函数 `Overlay/FocusCooldown.ShouldSkip`(6 单测:10s 内同状态跳过、10s 后显示、状态变化立即显示、冷却 0 总是显示、无历史/未知显示、大小写不敏感)。
+- `HudController.NotifyFocusChanged`:冷却判定(Verbose"聚焦 HUD 冷却中,跳过");`ShowForCaret` 改返回 bool,仅实际显示才更新 `_lastFocusKey/_lastFocusShownAtMs`。
+
+## dist 实测(记事本 ↔ Chrome 地址栏跨 hwnd,日志摘录)
+
+```
+[20:02:16.275] [HUD] 显示 '中' …            ← 首次聚焦记事本:显示
+[20:02:16.402] [HUD] 聚焦 HUD 冷却中,跳过    ← 10s 内切 Chrome 地址栏(跨 hwnd 同状态):跳过
+[20:02:17.586] [HUD] 聚焦 HUD 冷却中,跳过    ← 地址栏 Ctrl+L 再聚焦:跳过
+[20:02:22.299] [Caps] 短按 … 主副互切 → English (US Keyboard)
+[20:02:25.117] [HUD] 显示 'EN' …            ← 状态变化后聚焦:立即显示(切换路径不受冷却限制)
+```
+
+注:23.385 出现一次"陈旧状态跳过"——Monitor 采样 200ms 滞后,焦点事件先于状态采样到达;属可接受时序,下一次聚焦即修正。
+
+- build 0 警告 0 错误;dotnet test **125/125**(新增 FocusCooldownTests ×6);publish 双版本成功;git 已提交。

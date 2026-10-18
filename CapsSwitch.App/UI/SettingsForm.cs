@@ -23,6 +23,7 @@ public sealed class SettingsForm : Form
     private readonly NumericUpDown _longPressMs;
     private readonly NumericUpDown _sequenceGapMs;
     private readonly NumericUpDown _hudDurationMs;
+    private readonly NumericUpDown _hudFocusCooldown;
     private readonly CheckBox _hudEnabled;
     private readonly CheckBox _autoStart;
 
@@ -53,7 +54,7 @@ public sealed class SettingsForm : Form
         // 绝对逻辑布局 + 手动 DPI 缩放(WinForms 的 AutoScaleMode 不缩放运行时设置的 ClientSize,
         // Phase 3 首版因此子控件放大但窗口没放大 → 内容被裁剪)
         AutoScaleMode = AutoScaleMode.None;
-        const int LogicalWidth = 440, LogicalHeight = 526;
+        const int LogicalWidth = 440, LogicalHeight = 556;
 
         _sources = host.Service.GetSources();
         var settings = host.Settings;
@@ -107,7 +108,7 @@ public sealed class SettingsForm : Form
         Controls.Add(gbSrc);
 
         // ── 触发参数 ──
-        var gbTrig = new GroupBox { Text = "触发参数", Bounds = new Rectangle(12, 258, 416, 148) };
+        var gbTrig = new GroupBox { Text = "触发参数", Bounds = new Rectangle(12, 258, 416, 178) };
         _longPressMs = new NumericUpDown { Minimum = 100, Maximum = 2000, Bounds = new Rectangle(170, 22, 90, 23) };
         _sequenceGapMs = new NumericUpDown { Minimum = 100, Maximum = 2000, Bounds = new Rectangle(170, 52, 90, 23) };
         _hudDurationMs = new NumericUpDown { Minimum = 200, Maximum = 10000, Increment = 100, Bounds = new Rectangle(170, 82, 90, 23) };
@@ -120,13 +121,17 @@ public sealed class SettingsForm : Form
         gbTrig.Controls.Add(_sequenceGapMs);
         gbTrig.Controls.Add(LabelAt(14, 85, "HUD 显示时长(毫秒)"));
         gbTrig.Controls.Add(_hudDurationMs);
-        _hudEnabled = new CheckBox { Text = "启用输入焦点提示(HUD)", AutoSize = true, Bounds = new Rectangle(170, 112, 230, 20) };
+        _hudFocusCooldown = new NumericUpDown { Minimum = 0, Maximum = 3600, Increment = 5, Bounds = new Rectangle(170, 112, 90, 23) };
+        _hudFocusCooldown.Value = Math.Clamp(settings.HudFocusCooldownSeconds, 0, 3600);
+        gbTrig.Controls.Add(LabelAt(14, 115, "聚焦冷却(秒,0=关)"));
+        gbTrig.Controls.Add(_hudFocusCooldown);
+        _hudEnabled = new CheckBox { Text = "启用输入焦点提示(HUD)", AutoSize = true, Bounds = new Rectangle(170, 142, 230, 20) };
         _hudEnabled.Checked = settings.HudEnabled;
         gbTrig.Controls.Add(_hudEnabled);
         Controls.Add(gbTrig);
 
         // ── 启动 ──
-        var gbBoot = new GroupBox { Text = "启动", Bounds = new Rectangle(12, 414, 416, 56) };
+        var gbBoot = new GroupBox { Text = "启动", Bounds = new Rectangle(12, 444, 416, 56) };
         _autoStart = new CheckBox { Text = "开机自启动(当前用户)", AutoSize = true, Bounds = new Rectangle(20, 22, 240, 20) };
         _autoStart.Checked = settings.AutoStart;
         gbBoot.Controls.Add(_autoStart);
@@ -134,10 +139,10 @@ public sealed class SettingsForm : Form
 
         // ── 按钮 ──
         var save = AccentButton("保存", 92);
-        save.Bounds = new Rectangle(328, 482, 92, 28);
+        save.Bounds = new Rectangle(328, 512, 92, 28);
         save.Click += (_, _) => SaveAndClose();
         var cancel = FlatButton("取消", 92);
-        cancel.Bounds = new Rectangle(228, 482, 92, 28);
+        cancel.Bounds = new Rectangle(228, 512, 92, 28);
         cancel.Click += (_, _) => Close();
         Controls.Add(save);
         Controls.Add(cancel);
@@ -225,6 +230,7 @@ public sealed class SettingsForm : Form
             settings.LongPressThresholdMs = (int)_longPressMs.Value;
             settings.SequenceGapMs = (int)_sequenceGapMs.Value;
             settings.HudDurationMs = (int)_hudDurationMs.Value;
+            settings.HudFocusCooldownSeconds = (int)_hudFocusCooldown.Value;
             settings.HudEnabled = _hudEnabled.Checked;
             settings.AutoStart = _autoStart.Checked;
             _store.Save(settings);

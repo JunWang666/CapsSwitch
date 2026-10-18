@@ -72,6 +72,8 @@ public sealed class SettingsStore
         if (settings.LongPressThresholdMs <= 0) settings.LongPressThresholdMs = 400;
         if (settings.SequenceGapMs <= 0) settings.SequenceGapMs = 300;
         if (settings.HudDurationMs <= 0) settings.HudDurationMs = 1000;
+        if (settings.HudFocusCooldownSeconds < 0 || settings.HudFocusCooldownSeconds > 3600)
+            settings.HudFocusCooldownSeconds = 10;
 
         var alive = new HashSet<string>(sources.Select(s => s.Id), StringComparer.OrdinalIgnoreCase);
 

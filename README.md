@@ -102,6 +102,8 @@ powershell -ExecutionPolicy Bypass -File scripts\publish.ps1
   - 长按 CapsLock 后:显示系统真实大写状态 ⇪ 大写 / ⇪ 小写;
   - 文本控件聚焦时总是显示;外部(非 Caps)输入源变化也触发紧凑徽章。
 
+配置项 `HudFocusCooldownSeconds`(默认 10,0=关闭):聚焦触发的 HUD 在"同输入源+同中英文模式"状态下 10 秒内不重复弹出;切换输入源/模式后立即弹出。切换、连按列表、长按提示不受冷却限制。
+
 日志:`%LocalAppData%\CapsSwitch\capswitch.log`(>2MB 自动截断)。
 
 ## CLI 调试命令

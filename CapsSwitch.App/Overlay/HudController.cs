@@ -27,6 +27,8 @@ public sealed class HudController : IDisposable
     private readonly System.Windows.Forms.Timer _hideTimer;
     private IntPtr _lastCaretHwnd;
     private Rectangle? _lastCaretRect;
+    private string? _lastFocusKey;
+    private long _lastFocusShownAtMs;
 
     /// <summary>列表 HUD 被隐藏(超时)或被徽章显示替换时触发:循环会话据此结束。</summary>
     public event Action? ListHidden;
@@ -71,12 +73,31 @@ public sealed class HudController : IDisposable
         });
     }
 
-    /// <summary>焦点变化触发(UIA 线程上调入):总是显示,不做 (hwnd+源+模式) 同状态去重。</summary>
+    /// <summary>
+    /// 焦点变化触发(UIA 线程上调入)。带冷却:同 (源+模式) 状态在冷却期内不重复显示;
+    /// 状态变化立即显示。切换/外部变化/循环/⇪ 路径不受冷却限制。
+    /// </summary>
     public void NotifyFocusChanged(FocusSnapshot snapshot)
     {
         if (!_settings.HudEnabled || !snapshot.IsTextInput || snapshot.CaretRect is null)
             return;
-        MarshalToUi(() => ShowForCaret(snapshot.CaretRect.Value, snapshot.Hwnd, posSource: $"focus:{snapshot.Method}", suppressIfUnchanged: false));
+        MarshalToUi(() =>
+        {
+            var state = GetLocalForegroundState();
+            string? key = state.source is null ? null : $"{state.source.Id}|{(state.nativeMode ? "native" : "alpha")}";
+            long now = Environment.TickCount64;
+            if (FocusCooldown.ShouldSkip(_lastFocusKey, _lastFocusShownAtMs, key, now, _settings.HudFocusCooldownSeconds))
+            {
+                Logger.Verbose("[HUD] 聚焦 HUD 冷却中,跳过");
+                return;
+            }
+            // 只有真正显示才更新冷却时间戳(被丢弃的请求不算;冷却跳过也不重置计时)
+            if (ShowForCaret(snapshot.CaretRect.Value, snapshot.Hwnd, posSource: $"focus:{snapshot.Method}", suppressIfUnchanged: false))
+            {
+                _lastFocusKey = key;
+                _lastFocusShownAtMs = now;
+            }
+        });
     }
 
     /// <summary>切换完成触发(切换线程上调入)。短按(index=0)=紧凑徽章;连按(≥1)=循环列表。
@@ -228,7 +249,7 @@ public sealed class HudController : IDisposable
         return (source, state.NativeMode);
     }
 
-    private void ShowForCaret(
+    private bool ShowForCaret(
         Rectangle caretRect, IntPtr hwnd, string? forceText = null, int? durationOverrideMs = null,
         string posSource = "uia", bool suppressIfUnchanged = true,
         long pressedAtMs = 0, InputSourceInfo? optimisticTarget = null)
@@ -242,16 +263,16 @@ public sealed class HudController : IDisposable
             // 切换刚完成时强制尚未落位:对主中文 TIP 目标乐观按中文模式显示,Monitor 随后对账
             var effective = optimisticTarget ?? state.source;
             if (effective is null)
-                return;
+                return false;
             bool native = optimisticTarget?.Id == _chineseTipId || state.nativeMode;
             text = HudTextMapper.Map(effective, native, _chineseTipId);
             if (text is null)
-                return;
+                return false;
             stateKey = $"{hwnd.ToInt64():x8}|{effective.Id}|{(native ? "native" : "alpha")}";
         }
 
         if (suppressIfUnchanged && stateKey is not null && _form.Visible && stateKey == _lastShownKey)
-            return; // 同一 (hwnd+源+模式) 未变,不重复闪烁(仅非焦点触发路径)
+            return false; // 同一 (hwnd+源+模式) 未变,不重复闪烁(仅非焦点触发路径)
 
         if (_form.Visible && _lastShownKey == "list")
             ListHidden?.Invoke(); // 列表被徽章替换 → 循环会话结束
@@ -270,6 +291,7 @@ public sealed class HudController : IDisposable
         // (如自己的设置窗口)时会把 HUD 激活、抢走键盘焦点;TopMost 已在,这里只带 NOACTIVATE 重申置顶。
         Interop.Win32Native.SetWindowPos(_form.Handle, Interop.Win32Native.HwndTopmost, 0, 0, 0, 0,
             Interop.Win32Native.SwpNoMove | Interop.Win32Native.SwpNoSize | Interop.Win32Native.SwpNoActivate | Interop.Win32Native.SwpShowWindow);
+        return true;
     }
 
     // ── 光标位置快解析(同步、微秒级;UI 首帧不等待 UIA 定位) ──
